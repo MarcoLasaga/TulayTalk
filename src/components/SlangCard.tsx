@@ -1,14 +1,17 @@
-import type { DetectedSlang } from "@/lib/nlpEngine";
+import type { DetectedExpression } from "@/lib/nlpEngine";
+import type { Generation } from "@/data/generationalDatabase";
 import CategoryBadge from "./CategoryBadge";
 import { motion } from "framer-motion";
 
 interface SlangCardProps {
-  detection: DetectedSlang;
+  detection: DetectedExpression;
   index: number;
 }
 
+const generations: Generation[] = ["Gen Alpha", "Gen Z", "Gen X"];
+
 const SlangCard = ({ detection, index }: SlangCardProps) => {
-  const entry = detection.matchedEntry;
+  const group = detection.matchedGroup;
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -16,40 +19,30 @@ const SlangCard = ({ detection, index }: SlangCardProps) => {
       transition={{ delay: index * 0.08, duration: 0.3 }}
       className="linguistic-card space-y-3"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-display text-lg font-bold text-foreground">
-            {entry.slangWord}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            → <span className="font-semibold text-primary">{entry.formalTranslation}</span>
-          </p>
-        </div>
-        <CategoryBadge category={entry.category} />
+      <div>
+        <h3 className="font-display text-lg font-bold text-foreground">{group.coreMeaning}</h3>
+        <p className="text-sm text-muted-foreground">{group.context}</p>
       </div>
 
       <div className="space-y-2">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Meaning
-          </p>
-          <p className="text-sm text-foreground">{entry.meaning}</p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Origin
-          </p>
-          <p className="text-sm text-foreground">{entry.origin}</p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Example
-          </p>
-          <p className="text-sm italic text-foreground">"{entry.exampleSentence}"</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            → {entry.exampleTranslation}
-          </p>
-        </div>
+        {generations.map((gen) => {
+          const exprs = group.expressions.filter((e) => e.generation === gen);
+          if (exprs.length === 0) return null;
+          return (
+            <div key={gen}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{gen}</p>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {exprs.map((expr, j) => (
+                  <span key={j} className="text-sm font-medium text-foreground">
+                    {expr.expression}
+                    {expr.category && <CategoryBadge category={expr.category} />}
+                    {j < exprs.length - 1 && ", "}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </motion.div>
   );

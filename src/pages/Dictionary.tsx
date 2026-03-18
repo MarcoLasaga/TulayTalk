@@ -1,28 +1,25 @@
 import { useState, useMemo } from "react";
-import { searchDictionary } from "@/lib/nlpEngine";
-import type { MorphologicalCategory } from "@/data/slangDatabase";
-import CategoryBadge from "@/components/CategoryBadge";
+import { searchMeaningGroups } from "@/lib/nlpEngine";
+import type { Generation } from "@/data/generationalDatabase";
+import MeaningCard from "@/components/MeaningCard";
 import Header from "@/components/Header";
 import { Search, BookOpen } from "lucide-react";
-import { motion } from "framer-motion";
 
-const allCategories: MorphologicalCategory[] = [
-  "Acronym", "Clipping", "Metathesis", "Spelling Change", "Persona-based",
-  "Hybrid Blending", "Reduplication", "Homophone", "Affixation",
-  "Code-switching", "Semantic Shift", "Onomatopoeia",
-];
+const generations: (Generation | "All")[] = ["All", "Gen Alpha", "Gen Z", "Gen X"];
 
 const Dictionary = () => {
   const [query, setQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [selectedGen, setSelectedGen] = useState<string>("All");
 
   const results = useMemo(() => {
-    let entries = searchDictionary(query);
-    if (selectedCategory !== "All") {
-      entries = entries.filter((e) => e.category === selectedCategory);
+    let groups = searchMeaningGroups(query);
+    if (selectedGen !== "All") {
+      groups = groups.filter((g) =>
+        g.expressions.some((e) => e.generation === selectedGen)
+      );
     }
-    return entries.sort((a, b) => a.slangWord.localeCompare(b.slangWord));
-  }, [query, selectedCategory]);
+    return groups.sort((a, b) => a.coreMeaning.localeCompare(b.coreMeaning));
+  }, [query, selectedGen]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,10 +28,10 @@ const Dictionary = () => {
         <div className="space-y-2">
           <h1 className="font-display text-3xl font-extrabold text-foreground flex items-center gap-3">
             <BookOpen className="h-8 w-8 text-primary" />
-            Slang Dictionary
+            Generational Dictionary
           </h1>
           <p className="text-muted-foreground">
-            Browse {results.length} Filipino-English slang entries with linguistic breakdowns.
+            Browse {results.length} meaning groups with cross-generational expression mappings.
           </p>
         </div>
 
@@ -45,71 +42,36 @@ const Dictionary = () => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search slang, meaning, or category…"
+            placeholder="Search by meaning, expression, or tag…"
             className="w-full rounded-lg border border-border bg-card pl-11 pr-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring font-body"
           />
         </div>
 
-        {/* Category filters */}
+        {/* Generation filters */}
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedCategory("All")}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              selectedCategory === "All"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            All
-          </button>
-          {allCategories.map((cat) => (
+          {generations.map((gen) => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              key={gen}
+              onClick={() => setSelectedGen(gen)}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                selectedCategory === cat
+                selectedGen === gen
                   ? "bg-primary text-primary-foreground border-primary"
                   : "border-border text-muted-foreground hover:bg-muted"
               }`}
             >
-              {cat}
+              {gen}
             </button>
           ))}
         </div>
 
         {/* Entries */}
-        <div className="space-y-3">
-          {results.map((entry, i) => (
-            <motion.div
-              key={entry.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: Math.min(i * 0.03, 0.5) }}
-              className="linguistic-card"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-display text-lg font-bold text-foreground">
-                      {entry.slangWord}
-                    </h3>
-                    <CategoryBadge category={entry.category} />
-                  </div>
-                  <p className="text-sm text-primary font-semibold">
-                    → {entry.formalTranslation}
-                  </p>
-                  <p className="text-sm text-foreground">{entry.meaning}</p>
-                  <p className="text-xs text-muted-foreground">{entry.origin}</p>
-                  <p className="text-sm italic text-muted-foreground">
-                    "{entry.exampleSentence}"
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+        <div className="space-y-4">
+          {results.map((group, i) => (
+            <MeaningCard key={group.id} group={group} index={i} />
           ))}
           {results.length === 0 && (
             <p className="text-center text-muted-foreground py-12">
-              No entries found. Try a different search term.
+              No meaning groups found. Try a different search term.
             </p>
           )}
         </div>
