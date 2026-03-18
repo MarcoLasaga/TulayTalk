@@ -1,5 +1,5 @@
 import { getCategoryColor } from "@/lib/nlpEngine";
-import type { MorphologicalCategory } from "@/data/slangDatabase";
+import type { MorphologicalCategory } from "@/data/generationalDatabase";
 
 interface CategoryBadgeProps {
   category: MorphologicalCategory;
