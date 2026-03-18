@@ -1,136 +1,148 @@
-import { slangDatabase, slangLookup, type SlangEntry, type MorphologicalCategory } from "@/data/slangDatabase";
+import {
+  meaningGroups,
+  expressionLookup,
+  type MeaningGroup,
+  type GenerationalExpression,
+  type Generation,
+  type MorphologicalCategory,
+} from "@/data/generationalDatabase";
 
-export interface DetectedSlang {
+export interface DetectedExpression {
   original: string;
-  matchedEntry: SlangEntry;
+  matchedGroup: MeaningGroup;
+  matchedExpression: GenerationalExpression;
   startIndex: number;
   endIndex: number;
 }
 
 export interface TranslationResult {
   originalText: string;
-  detectedSlang: DetectedSlang[];
+  sourceGeneration: Generation;
+  targetGeneration: Generation;
+  detectedExpressions: DetectedExpression[];
   translatedText: string;
   processingTimeMs: number;
 }
 
-// Step 1: Text Preprocessing
+// Preprocessing
 function preprocessText(text: string): string[] {
-  // Normalize whitespace, keep original case for display
   const cleaned = text.replace(/[.,!?;:()]/g, " ").replace(/\s+/g, " ").trim();
   return cleaned.split(" ").filter(Boolean);
 }
 
-// Step 2: Rule-Based Detection via regex patterns + dictionary
-const acronymPattern = /^[A-Z]{2,}$/;
-const metathesisKnown = ["yorme", "ermat", "erpat", "lodi", "petmalu", "werpa"];
-
-function detectSlangInTokens(tokens: string[], originalText: string): DetectedSlang[] {
-  const detected: DetectedSlang[] = [];
+// Detect expressions in text
+function detectExpressions(tokens: string[], originalText: string): DetectedExpression[] {
+  const detected: DetectedExpression[] = [];
   const lowerText = originalText.toLowerCase();
   let searchFrom = 0;
 
-  // Multi-word pass: check 2-3 word combinations first
   for (let i = 0; i < tokens.length; i++) {
-    // Check 2-word combinations
+    // Check 2-word combinations first
     if (i < tokens.length - 1) {
       const twoWord = `${tokens[i]} ${tokens[i + 1]}`.toLowerCase();
-      const entry = slangLookup.get(twoWord);
-      if (entry) {
+      const match = expressionLookup.get(twoWord);
+      if (match) {
         const idx = lowerText.indexOf(twoWord, searchFrom);
         if (idx !== -1) {
           detected.push({
             original: originalText.substring(idx, idx + twoWord.length),
-            matchedEntry: entry,
+            matchedGroup: match.meaningGroup,
+            matchedExpression: match.expression,
             startIndex: idx,
             endIndex: idx + twoWord.length,
           });
           searchFrom = idx + twoWord.length;
-          i++; // skip next token
+          i++;
           continue;
         }
       }
     }
 
-    // Single-word pass
+    // Single word
     const tokenLower = tokens[i].toLowerCase();
-    const entry = slangLookup.get(tokenLower);
-    if (entry) {
+    const match = expressionLookup.get(tokenLower);
+    if (match) {
       const idx = lowerText.indexOf(tokenLower, searchFrom);
       if (idx !== -1) {
         detected.push({
           original: originalText.substring(idx, idx + tokenLower.length),
-          matchedEntry: entry,
+          matchedGroup: match.meaningGroup,
+          matchedExpression: match.expression,
           startIndex: idx,
           endIndex: idx + tokenLower.length,
         });
         searchFrom = idx + tokenLower.length;
-        continue;
       }
-    }
-
-    // Heuristic: detect unknown acronyms
-    if (acronymPattern.test(tokens[i]) && !entry) {
-      // Unknown acronym — skip, not in dictionary
     }
   }
 
-  // Sort by startIndex
   detected.sort((a, b) => a.startIndex - b.startIndex);
   return detected;
 }
 
-// Step 3-5: Full pipeline
-export function translateText(text: string): TranslationResult {
+// Get equivalent expression for a target generation from a meaning group
+function getTargetExpression(group: MeaningGroup, targetGen: Generation): string {
+  const targetExprs = group.expressions.filter((e) => e.generation === targetGen);
+  return targetExprs.length > 0 ? targetExprs[0].expression : group.coreMeaning;
+}
+
+// Full translation pipeline
+export function translateText(
+  text: string,
+  sourceGeneration: Generation = "Gen Z",
+  targetGeneration: Generation = "Gen X"
+): TranslationResult {
   const startTime = performance.now();
 
   if (!text.trim()) {
     return {
       originalText: text,
-      detectedSlang: [],
+      sourceGeneration,
+      targetGeneration,
+      detectedExpressions: [],
       translatedText: text,
       processingTimeMs: 0,
     };
   }
 
   const tokens = preprocessText(text);
-  const detected = detectSlangInTokens(tokens, text);
+  const detected = detectExpressions(tokens, text);
 
-  // Build translated text by replacing slang with formal translations
+  // Build translated text
   let translatedText = text;
-  // Process from end to start to maintain indices
   const sortedDesc = [...detected].sort((a, b) => b.startIndex - a.startIndex);
   for (const d of sortedDesc) {
+    const replacement = getTargetExpression(d.matchedGroup, targetGeneration);
     translatedText =
       translatedText.substring(0, d.startIndex) +
-      d.matchedEntry.formalTranslation +
+      replacement +
       translatedText.substring(d.endIndex);
   }
 
-  const processingTimeMs = performance.now() - startTime;
-
   return {
     originalText: text,
-    detectedSlang: detected,
+    sourceGeneration,
+    targetGeneration,
+    detectedExpressions: detected,
     translatedText,
-    processingTimeMs,
+    processingTimeMs: performance.now() - startTime,
   };
 }
 
-// Search dictionary
-export function searchDictionary(query: string): SlangEntry[] {
-  if (!query.trim()) return slangDatabase;
+// Search meaning groups
+export function searchMeaningGroups(query: string): MeaningGroup[] {
+  if (!query.trim()) return meaningGroups;
   const q = query.toLowerCase();
-  return slangDatabase.filter(
-    (e) =>
-      e.slangWord.toLowerCase().includes(q) ||
-      e.meaning.toLowerCase().includes(q) ||
-      e.category.toLowerCase().includes(q) ||
-      e.tags.some((t) => t.includes(q))
+  return meaningGroups.filter(
+    (g) =>
+      g.coreMeaning.toLowerCase().includes(q) ||
+      g.context.toLowerCase().includes(q) ||
+      g.tags.some((t) => t.includes(q)) ||
+      g.expressions.some((e) => e.expression.toLowerCase().includes(q))
   );
 }
 
-// Get category color mapping
+// Category color mapping
 export function getCategoryColor(category: MorphologicalCategory): { bg: string; text: string } {
   const colors: Record<MorphologicalCategory, { bg: string; text: string }> = {
     Metathesis: { bg: "bg-blue-100", text: "text-blue-800" },
@@ -147,15 +159,4 @@ export function getCategoryColor(category: MorphologicalCategory): { bg: string;
     Onomatopoeia: { bg: "bg-lime-100", text: "text-lime-800" },
   };
   return colors[category] || { bg: "bg-gray-100", text: "text-gray-800" };
-}
-
-// Stats
-export function getCategoryStats(): { category: string; count: number }[] {
-  const counts: Record<string, number> = {};
-  slangDatabase.forEach((e) => {
-    counts[e.category] = (counts[e.category] || 0) + 1;
-  });
-  return Object.entries(counts)
-    .map(([category, count]) => ({ category, count }))
-    .sort((a, b) => b.count - a.count);
 }
